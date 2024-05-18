@@ -1,10 +1,114 @@
+<?php 
+    session_start();
+
+    include_once('../../Model/conexao.php');
+
+?>
+
+<?php
+ 
+    $dados = filter_input_array(INPUT_POST,FILTER_DEFAULT);
+
+if(!empty($dados['Enviar']))
+{
+
+if($dados['selecao'] == "entrada" || $dados['selecao'] == "saida" ){
+    $empty_input= false;
+    $dados = array_map('trim', $dados);
+
+    if (!empty($dados['preco'])) {
+    // Substitui vírgula por ponto para armazenar no banco de dados 
+        $dados['preco'] = str_replace(',', '.', $dados['preco']);
+    }
+
+   
+    if($dados['modelo'] == "" || $dados['ano'] == "" || $dados['tamanho'] == "" || $dados['preco'] == "" || $dados['quantidade'] == "" ){
+    // Verifica se algum campo obrigatório está vazio
+        $empty_input = true;
+        echo "<p style='color: red'>ERRO:Existem campos obrigatorios* em branco </p> <br>";
+    }
+
+    if($empty_input == false){
+
+
+        $quantidade = $dados['quantidade'];
+        if ($dados['selecao'] == "saida") {
+        // Se for saída, torna a quantidade negativa
+            $quantidade *= -1;
+        }
+    
+
+        // Consulta para verificar se a camisa já existe no banco de dados
+        $queryVerificarCamisa  = "SELECT idcamisa, quantidade FROM projeto.camisas WHERE modelo = :modelo AND ano = :ano AND tamanho = :tamanho";
+        $verificarCamisa  = $pdo->prepare($queryVerificarCamisa);
+        $verificarCamisa->execute([
+            ':modelo' => $dados['modelo'],
+            ':ano' => $dados['ano'],
+            ':tamanho' => $dados['tamanho']
+        ]);
+
+        if ($verificarCamisa->rowCount() > 0) 
+        {
+        // Se a camisa já existe
+            $camisaExistente = $verificarCamisa->fetch(PDO::FETCH_ASSOC);
+            $novaQuantidade = $camisaExistente['quantidade'] + $quantidade;
+
+            
+        // Verificar se a quantidade não ficará negativa    
+            if ($novaQuantidade < 0) {
+                echo "<p style='color: red'>ERRO: A operação resultaria em uma quantidade negativa</p><br>";
+            }
+            else
+            {
+                // Atualizar a quantidade da camisa existente
+                $queryAtualizarQuantidade = "UPDATE projeto.camisas SET quantidade = :quantidade WHERE idcamisa = :idcamisa";
+                $atualizarQuantidade = $pdo->prepare($queryAtualizarQuantidade);
+                $atualizarQuantidade->execute([
+                    ':quantidade' => $novaQuantidade,
+                    ':idcamisa' => $camisaExistente['idcamisa']
+                ]);
+
+                echo "<p style='color: green'>Quantidade da camisa atualizada com sucesso</p><br>";
+            }
+        }   
+        else 
+        {
+        // Se a camisa não existe, insere uma nova camisa
+            $queryCamisa = "INSERT INTO projeto.camisas (modelo, ano, tamanho, preco, quantidade) VALUES (
+                '" . $dados['modelo'] . "', 
+                '" . $dados['ano'] . "', 
+                '" . $dados['tamanho'] . "', 
+                '" . $dados['preco'] . "', 
+                '" . $dados['quantidade'] . "'
+            )";
+
+            $cadCamisa = $pdo->prepare($queryCamisa);
+            $cadCamisa->execute();
+
+            
+            // Verificar se a inserção foi bem-sucedida
+            if ($cadCamisa->rowCount()) {
+                echo "<p style='color: green'>Camisa cadastrada com sucesso</p><br>";
+                unset($dados);
+            } else {
+                echo "<p style='color: red'>ERRO: Camisa não cadastrada</p><br>";
+            }
+            
+        }
+        unset($dados);//garante o unset de dados
+}
+}
+}
+
+?>
+
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrabalhoWeb</title>
-    <link rel="stylesheet" href="../CSS/Relatorio.css">
+    <link rel="stylesheet" href="./Relatorio.css">
 </head>
 <body>
     <header> 
@@ -15,7 +119,8 @@
                 <li class="menu__item"><a class="menu__link" href ="../Home/Home.php" >Home</a></li>
                 <li class="menu__item"><a class="menu__link" href="../Feed/Feed.php" >Feed</a></li>
                 <li class="menu__item"><a class="menu__link" href="../Relatorio/Relatorio.php" >Relatório</a></li>
-                <li class="menu__item"><a class="menu__link" href="../Login/Login.php" >Login</a></li>
+                <li class="menu__item"><a class="menu__link" href="../Cadastro/Cadastro.php" >Cadastro/Login</a></li>
+                <li class="menu__item"><a class="menu__linkSair" href="../../Controller/sair.php" >Sair</a></li>
             </ul> 
         </nav> 
     </header>
@@ -24,30 +129,30 @@
 
     <div class="containerPaiPag">
         <section class="section">
-                <form action="">
+                <form action="" method="post">
 
                     <div class="divContainerPaiCampos">
                         <div class="primeiraDivCamposForm">
                             
                             <div class="campos">
-                                <label for="selecao">Defina:</label>
-                                <select name="select" id="selecao1">
-                                    <option value="op1">Entrada</option>
-                                    <option value="op2">Saida</option>
+                                <label for="selecao">Entrada ou Saida*:</label>
+                                <select name="selecao" id="selecao1">
+                                    <option value="entrada">Entrada</option>
+                                    <option value="saida">Saida</option>
                                 </select>
                             </div>
 
                             <div class="campos">
-                                <label  for="nomeProduto">Descrição:</label>
-                                <input class="input" type="text" name="nomeProduto" id="texto" placeholder="Digite o nome do produto">
+                                <label  for="modelo">Modelo*:</label>
+                                <input class="input" type="text" name="modelo" id="texto" placeholder="Digite o nome do produto">
                             </div>
 
                             <div class="campos">
-                                <label for="preco">Preço: </label>
+                                <label for="preco">Preço*: </label>
                                 <input type="text" name="preco" class="input" placeholder="Digite o preço atual">
                             </div>
                             <div class="campos">
-                                <label for="ano">Ano: </label>
+                                <label for="ano">Ano*: </label>
                                 <input type="text" name="ano" class="input" placeholder="Digite o ano da camisa">
                             </div>
                         </div>
@@ -55,137 +160,82 @@
                         <div class="segundaDivCamposForm">
                             
                             <div class="campos">
-                                <label for="select">Tamanho: </label>
-                                <select name="select" id="selecao2">
-                                    <option value="op1">P</option>
-                                    <option value="op2">M</option>
-                                    <option value="op3">G</option>
+                                <label for="select">Tamanho*: </label>
+                                <select name="tamanho" id="selecao2">
+                                    <option value="P">P</option>
+                                    <option value="M">M</option>
+                                    <option value="G">G</option>
                                 </select>
                             </div>
                         
                             <div class="campos">
-                                <label for="Quantidade">Quantidade: </label>
-                                <input class="input" type="number" name="Quantidade" id="Quantidade" placeholder="Digite a quantidade em estoque">
-                            </div>
-
-                            <div class="campos">
-                                <label for="precoTotal">Preço Total: </label>
-                                <input type="text" name="precoTotal" class="input" placeholder="Digite o preço total, sem descontos">
-                            </div>
-                            <div class="campos">
-                                <label for="linha">Linha: </label>
-                                <input type="text" name="linha" class="input" placeholder="Qual linha deseja modificar">
+                                <label for="Quantidade">Quantidade*: </label>
+                                <input class="input" type="number" name="quantidade" id="Quantidade" placeholder="Digite a quantidade em estoque">
                             </div>
                         </div>
                             
                     </div>
 
                     <div class="divButtonsForm">
-                        <input class="submit" type="submit" value="Enviar"> 
+                        <input class="submit" type="submit" value="Enviar" name="Enviar"> 
                         <input class="reset" type="reset" value="Limpar">
                     </div>
 
                 </form>
 
         </section>
-
         <section class="sectionTable">
-            <div>
-                <table>
-                    <tr>
-                        <th>Id</th>
-                        <th>Descrição</th>
-                        <th>Ano</th>
-                        <th>Tamanho</th>
-                        <th>Quantidade</th>
-                        <th>Preço</th>
-                        <th>Preço Total</th>
-                    </tr>
-                    <tr>
-                        <td id="idLinha1">1</td>
-                        <td id="descricaoLinha1">Barcelona</td>
-                        <td id="anoLinha1">2022</td>
-                        <td id="tamanhoLinha1">M</td>
-                        <td id="quantidadeLinha1">120</td>
-                        <td id="precoAtualLinha1">R$ 249,90</td>
-                        <td id="precoTotalLinha1">R$ 29.988,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha2">2</td>
-                        <td id="descricaoLinha2">Real Madrid</td>
-                        <td id="anoLinha2">2022</td>
-                        <td id="tamanhoLinha2">G</td>
-                        <td id="quantidadeLinha2">97</td>
-                        <td id="precoAtualLinha2">R$ 299,90</td>
-                        <td id="precoTotalLinha2">R$ 29.090,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha3">3</td>
-                        <td id="descricaoLinha3">Brasil</td>
-                        <td id="anoLinha3">2022</td>
-                        <td id="tamanhoLinha3">M</td>
-                        <td id="quantidadeLinha3">87</td>
-                        <td id="precoAtualLinha3">R$ 349,90</td>
-                        <td id="precoTotalLinha3">R$ 30.441,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha4">4</td>
-                        <td id="descricaoLinha4">Argentina</td>
-                        <td id="anoLinha4">2022</td>
-                        <td id="tamanhoLinha4">P</td>
-                        <td id="quantidadeLinha4">75</td>
-                        <td id="precoAtualLinha4">R$ 299,90</td>
-                        <td id="precoTotalLinha4">R$ 22.492,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha5">5</td>
-                        <td id="descricaoLinha5">Wolver Hampton</td>
-                        <td id="anoLinha5">2022</td>
-                        <td id="tamanhoLinha5">G</td>
-                        <td id="quantidadeLinha5">89</td>
-                        <td id="precoAtualLinha5">R$ 239,90</td>
-                        <td id="precoTotalLinha5">R$ 21.351,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha6">6</td>
-                        <td id="descricaoLinha6">Inglaterra</td>
-                        <td id="anoLinha6">2022</td>
-                        <td id="tamanhoLinha6">M</td>
-                        <td id="quantidadeLinha6">113</td>
-                        <td id="precoAtualLinha6">R$ 299,90</td>
-                        <td id="precoTotalLinha6">R$ 33.888,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha7">7</td>
-                        <td id="descricaoLinha7">Juventus</td>
-                        <td id="anoLinha7">2022</td>
-                        <td id="tamanhoLinha7">P</td>
-                        <td id="quantidadeLinha7">98</td>
-                        <td id="precoAtualLinha7">R$ 259,90</td>
-                        <td id="precoTotalLinha7">R$ 25.470,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha8">8</td>
-                        <td id="descricaoLinha8">Arsenal</td>
-                        <td id="anoLinha8">2022</td>
-                        <td id="tamanhoLinha8">G</td>
-                        <td id="quantidadeLinha8">87</td>
-                        <td id="precoAtualLinha8">R$ 299,90</td>
-                        <td id="precoTotalLinha8">R$ 26.091,00</td>
-                    </tr>
-                    <tr>
-                        <td id="idLinha9">9</td>
-                        <td id="descricaoLinha9">Liverpool</td>
-                        <td id="anoLinha9">2022</td>
-                        <td id="tamanhoLinha9">G</td>
-                        <td id="quantidadeLinha9">62</td>
-                        <td id="precoAtualLinha9">R$ 309,90</td>
-                        <td id="precoTotalLinha9">R$ 19.213,00</td>
-                    </tr>
-                </table>
-            </div>
-        </section>
-    </div>
+        <?php 
+            $queryUsuario = "SELECT idcamisa, modelo, ano, tamanho, preco, quantidade FROM projeto.camisas";
+            $result = $pdo->prepare($queryUsuario);
+            $result->execute();
+
+        if ($result->rowCount() != 0) {
+        ?>
+        <table>
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Descrição</th>
+                    <th>Ano</th>
+                    <th>Tamanho</th>
+                    <th>Preço</th>
+                    <th>Peças em Estoque</th>
+                    <th>Valor em Estoque</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php 
+            while ($rowTable = $result->fetch(PDO::FETCH_ASSOC)) {
+            ?>
+                <tr>
+                    <td><?php echo $rowTable['idcamisa']; ?></td>
+                    <td><?php echo $rowTable['modelo']; ?></td>
+                    <td><?php echo $rowTable['ano']; ?></td>
+                    <td><?php echo $rowTable['tamanho']; ?></td>
+                    <td><?php echo 'R$ ' . number_format($rowTable['preco'], 2, ',', '.');  ?></td>
+                    <td><?php echo $rowTable['quantidade']; ?></td>
+                    <td><?php echo 'R$ ' . number_format(($rowTable['quantidade'] * $rowTable['preco'] ), 2, ',', '.'); ?></td>
+                </tr>
+            <?php 
+            }
+            ?>
+            </tbody>
+        </table>
+    <?php 
+    }
+    else{
+        echo "<p style='color: red'>Estoque vazio!</p> <br>";
+    }
+    ?>
+    </section>
+
+
+
+
+        </div>
+    </section>
+</div>
 </main>
 
 <footer class="footer">
